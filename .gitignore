@@ -3,3 +3,4 @@ config/config.env
 package-lock.json
 logs/rotate*
 monitors.db
+*.db
