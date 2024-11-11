@@ -4,3 +4,4 @@ package-lock.json
 logs/rotate*
 monitors.db
 *.db
+monitors.db
