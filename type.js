@@ -20,32 +20,7 @@ const icmpMonitor = (host, schedule, timeout, wait) => {
     }, timeout * 1000);
   };
   
-  // HTTP Monitor
-  const httpMonitor = async (url, schedule, timeout) => {
-    setInterval(async () => {
-      try {
-        const response = await axios.get(url);
-        console.log(`HTTP Monitor - URL: ${url}, Status Code: ${response.status}`);
-  
-        if (response.status !== 200) {
-          // Service is down, trigger an alert with priority 2
-          sendAlertWithPriority(`HTTP Monitor - URL: ${url} is down`, 2);
-        } else {
-          // Service is up, clear any alerts related to this service
-          // Replace with a function to clear alerts
-        }
-      } catch (error) {
-        console.log(`HTTP Monitor - URL: ${url}, Error: ${error.message}`);
-  
-        // Service is down, trigger an alert with priority 3
-        sendAlertWithPriority(`HTTP Monitor - URL: ${url} is down`, 3);
-      }
-    }, schedule * 1000); // Convert seconds to milliseconds for setInterval
-  
-    setTimeout(() => {
-      clearInterval();
-    }, timeout * 1000);
-  };
+
   
   // TCP Monitor
   const tcpMonitor = (host, port, schedule, timeout) => {
