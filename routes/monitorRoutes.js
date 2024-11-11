@@ -9,7 +9,11 @@ const {
   addAndGetHealthStatus,
   getSystemAlerts
 } = require('../controllers/monitorController');
+const { getRealTimeStatuses } = require('../controllers/statusController');
+const { checkMonitor } = require('../controllers/checkMonitorController');
 
+router.get('/realtime-status', getRealTimeStatuses);
+router.post('/check-monitor', checkMonitor);
 router.post('/monitors', addMonitor);
 router.get('/monitors/status', getMonitorStatus);
 router.delete('/monitors/:id', deleteMonitor);

@@ -1,9 +1,9 @@
 // services/monitors/httpMonitor.js
 const axios = require('axios');
 const { sendAlertWithPriority, clearAlert } = require('../alertService');
-const { updateMonitorStatus } = require('../../models/monitorModel');
+const { addMonitorLog } = require('../../models/monitorModel');
 
-module.exports = (monitor) => {
+module.exports = (monitor, handleStatusChange) => {
   if (!monitor || !monitor.url) {
     console.warn('Invalid monitor configuration passed to HTTP monitor:', monitor);
     return;
@@ -15,36 +15,33 @@ module.exports = (monitor) => {
   const intervalId = setInterval(async () => {
     try {
       const response = await axios.get(url);
-      console.log(`HTTP Monitor - URL: ${url}, Status Code: ${response.status}`);
-      
-      if (response.status === 200) {
-        if (previousStatus === 'DOWN') {
-          updateMonitorStatus(id, 'UP', (err) => {
-            if (err) console.error(`Failed to update status for monitor ID ${id}`);
-          });
+      const status = response.status === 200 ? 'UP' : 'DOWN';
+
+      if (status !== previousStatus) {
+        handleStatusChange(id, status); // Update status via monitorService
+        if (status === 'UP') {
           clearAlert(id);
-          console.log(`Alert cleared for monitor ID ${id}`);
-        }
-        previousStatus = 'UP';
-      } else {
-        if (previousStatus === 'UP') {
+        } else {
           sendAlertWithPriority(`HTTP Monitor - URL: ${url} is down`, id, 2);
-          updateMonitorStatus(id, 'DOWN', (err) => {
-            if (err) console.error(`Failed to update status for monitor ID ${id}`);
-          });
         }
+        previousStatus = status;
+      }
+
+      // Log the monitoring check
+      addMonitorLog(id, status, null, (err) => {
+        if (err) console.error(`Failed to log monitoring check for monitor ID ${id}`);
+      });
+    } catch (error) {
+      if (previousStatus !== 'DOWN') {
+        handleStatusChange(id, 'DOWN'); // Update status to DOWN via monitorService
+        sendAlertWithPriority(`HTTP Monitor - URL: ${url} is down`, id, 3);
         previousStatus = 'DOWN';
       }
-    } catch (error) {
-      console.log(`HTTP Monitor - URL: ${url}, Error: ${error.message}`);
-      
-      if (previousStatus === 'UP') {
-        sendAlertWithPriority(`HTTP Monitor - URL: ${url} is down`, id, 3);
-        updateMonitorStatus(id, 'DOWN', (err) => {
-          if (err) console.error(`Failed to update status for monitor ID ${id}`);
-        });
-      }
-      previousStatus = 'DOWN';
+
+      // Log the error
+      addMonitorLog(id, 'DOWN', error.message, (err) => {
+        if (err) console.error(`Failed to log error for monitor ID ${id}`);
+      });
     }
   }, schedule * 1000);
 

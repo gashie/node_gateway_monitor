@@ -16,7 +16,9 @@ db.serialize(() => {
       schedule INTEGER,
       timeout INTEGER,
       start BOOLEAN DEFAULT FALSE,
-      status TEXT DEFAULT 'UNKNOWN'
+      status TEXT DEFAULT 'UNKNOWN',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
@@ -30,14 +32,25 @@ db.serialize(() => {
       FOREIGN KEY (monitorId) REFERENCES monitors(id)
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS monitor_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      monitorId INTEGER,
+      status TEXT,
+      error TEXT,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (monitorId) REFERENCES monitors(id)
+    )
+  `);
 });
 
-// Function to get all active monitors (those set to start = true)
+// Functions to handle database interactions
+
 const getActiveMonitors = (callback) => {
   db.all("SELECT * FROM monitors WHERE start = 1", callback);
 };
 
-// Function to save a new monitor
 const saveMonitor = (monitor, callback) => {
   const { type, host, port, url, username, password, schedule, timeout, start } = monitor;
   db.run(
@@ -48,21 +61,40 @@ const saveMonitor = (monitor, callback) => {
   );
 };
 
-// Function to delete a monitor by ID
 const deleteMonitorById = (id, callback) => {
   db.run(`DELETE FROM monitors WHERE id = ?`, [id], callback);
 };
 
-// Function to get all monitors with their statuses
 const getAllMonitors = (callback) => {
   db.all("SELECT * FROM monitors", callback);
 };
 
-// Function to update monitor status
+// Update monitor status and update `updated_at` timestamp
 const updateMonitorStatus = (id, status, callback) => {
-  db.run(`UPDATE monitors SET status = ? WHERE id = ?`, [status, id], callback);
+  db.run(
+    `UPDATE monitors SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [status, id],
+    callback
+  );
 };
 
+// Create an entry in the monitor logs table
+const addMonitorLog = (monitorId, status, error, callback) => {
+  db.run(
+    `INSERT INTO monitor_logs (monitorId, status, error) VALUES (?, ?, ?)`,
+    [monitorId, status, error],
+    callback
+  );
+};
+
+// Get logs within a specified time range
+const getLogsByPeriod = (startTime, endTime, callback) => {
+  db.all(
+    `SELECT * FROM monitor_logs WHERE timestamp BETWEEN ? AND ?`,
+    [startTime, endTime],
+    callback
+  );
+};
 // Alert management functions
 const createAlert = (monitorId, serviceName, priority, callback) => {
   db.run(
@@ -80,6 +112,11 @@ const getAlerts = (callback) => {
   db.all("SELECT * FROM alerts", callback);
 };
 
+// Function to retrieve all alerts
+const getAllAlerts = (callback) => {
+  db.all("SELECT * FROM alerts", callback);
+};
+
 module.exports = {
   getActiveMonitors,
   saveMonitor,
@@ -88,5 +125,8 @@ module.exports = {
   updateMonitorStatus,
   createAlert,
   clearAlert,
-  getAlerts
+  getAlerts,
+  getLogsByPeriod,
+  addMonitorLog,
+  getAllAlerts
 };

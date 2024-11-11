@@ -1,5 +1,5 @@
 // services/alertService.js
-const db = require('../models/monitorModel');
+const { getAllAlerts, createAlert, clearAlert } = require('../models/monitorModel');
 
 let alertCount = 0;
 const maxAlerts = 5;
@@ -10,7 +10,7 @@ let activeAlerts = []; // In-memory storage of active alerts
 
 // Initialize alerts from database to memory on startup
 function loadAlertsToMemory() {
-  db.all("SELECT * FROM alerts", (err, rows) => {
+  getAllAlerts((err, rows) => {
     if (err) {
       console.error('Failed to load alerts from database:', err);
     } else {
@@ -27,13 +27,15 @@ async function sendAlertWithPriority(serviceName, monitorId, priority = 1) {
       lastAlertTime = Date.now();
       alertCount++;
 
-      // Save alert in memory and database
-      activeAlerts.push({ monitorId, serviceName, priority });
-      db.createAlert(monitorId, serviceName, priority, (err) => {
-        if (err) {
-          console.error('Failed to save alert to database:', err);
-        }
-      });
+      // Save alert in memory and database if it doesn't already exist
+      if (!activeAlerts.some(alert => alert.monitorId === monitorId)) {
+        activeAlerts.push({ monitorId, serviceName, priority });
+        createAlert(monitorId, serviceName, priority, (err) => {
+          if (err) {
+            console.error('Failed to save alert to database:', err);
+          }
+        });
+      }
     } else {
       alertQueue.push({ serviceName, monitorId, priority });
     }
@@ -55,24 +57,31 @@ function sendQueuedAlerts() {
 }
 
 // Function to clear an alert (both from memory and database) when the monitor is back "UP"
-function clearAlert(monitorId) {
-  // Remove from in-memory alerts
-  activeAlerts = activeAlerts.filter(alert => alert.monitorId !== monitorId);
+function clearAlertInMemory(monitorId) {
+  // Check if there is an active alert before attempting to clear it
+  const alertIndex = activeAlerts.findIndex(alert => alert.monitorId === monitorId);
 
-  // Remove from database
-  db.clearAlert(monitorId, (err) => {
-    if (err) {
-      console.error('Failed to clear alert from database:', err);
-    } else {
-      console.log(`Alert cleared for monitor ID ${monitorId}`);
-    }
-  });
+  if (alertIndex !== -1) {
+    // Remove from in-memory alerts
+    activeAlerts.splice(alertIndex, 1);
+
+    // Remove from database
+    clearAlert(monitorId, (err) => {
+      if (err) {
+        console.error('Failed to clear alert from database:', err);
+      } else {
+        console.log(`Alert cleared for monitor ID ${monitorId}`);
+      }
+    });
+  }
 }
 
 // Periodically synchronize alerts from database to memory (e.g., in case of external changes)
 function refreshAlerts() {
-  db.all("SELECT * FROM alerts", (err, rows) => {
-    if (!err) {
+  getAllAlerts((err, rows) => {
+    if (err) {
+      console.error('Failed to load alerts from database:', err);
+    } else {
       activeAlerts = rows;
     }
   });
@@ -81,4 +90,4 @@ function refreshAlerts() {
 // Refresh alerts every 5 minutes
 setInterval(refreshAlerts, 5 * 60 * 1000);
 
-module.exports = { sendAlertWithPriority, clearAlert, loadAlertsToMemory };
+module.exports = { sendAlertWithPriority, clearAlert: clearAlertInMemory, loadAlertsToMemory };
